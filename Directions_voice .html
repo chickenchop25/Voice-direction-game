@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Command Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            color: #334155;
+        }
+        #game-container {
+            background-color: #f8fafc;
+            padding: 20px;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        #gameCanvas {
+            background-color: #cbd5e1;
+            border: 2px solid #64748b;
+            border-radius: 0.75rem;
+            max-width: 100%;
+            height: auto;
+        }
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #voiceBtn {
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #ffffff;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-color: #1d4ed8;
+        }
+        #voiceBtn:hover {
+            background-color: #1e40af;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        #voiceBtn:active {
+            background-color: #1e3a8a;
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #message-box {
+            min-height: 20px;
+            padding: 8px;
+            background-color: #e0f2fe;
+            border: 1px solid #90cdf4;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-style: italic;
+            width: 100%;
+        }
+        .instructions {
+            text-align: center;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body class="selection:bg-blue-200">
+    <div id="game-container" class="w-full max-w-lg">
+        <h1 class="text-3xl font-bold">Voice Command Game</h1>
+        <canvas id="gameCanvas"></canvas>
+        <div class="instructions text-gray-600">
+            <p><strong>Instructions:</strong> Tap the button and say a command to move the character.</p>
+            <p class="font-bold">Try saying: "Go forward", "Go straight", "Turn left", "Turn right".</p>
+            <p class="font-bold">New command: "Go along" will move you to the next turn! "Turn around" will reverse your direction.</p>
+        </div>
+        <div class="w-full flex flex-col items-center gap-4">
+            <button id="voiceBtn" class="voice-btn">Start Listening</button>
+            <div id="message-box"></div>
+        </div>
+    </div>
+
+    <script>
+        // Use window.onload to ensure all HTML elements are loaded before the script runs.
+        window.onload = function() {
+            // --- Game Setup ---
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const messageBox = document.getElementById('message-box');
+            const voiceBtn = document.getElementById('voiceBtn');
+
+            // Set canvas dimensions
+            const tileSize = 40;
+            const mapWidth = 12;
+            const mapHeight = 12;
+            canvas.width = mapWidth * tileSize;
+            canvas.height = mapHeight * tileSize;
+
+            // Define the town map (0 = path, 1 = building)
+            const map = [
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+                [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1],
+                [1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1],
+                [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1],
+                [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
+                [1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ];
+
+            // Character state
+            let character = {
+                x: 1,
+                y: 1,
+                direction: 0, // 0: up, 1: right, 2: down, 3: left
+                size: tileSize * 0.8,
+            };
+
+            // --- Drawing Functions ---
+            function drawMap() {
+                for (let row = 0; row < map.length; row++) {
+                    for (let col = 0; col < map[row].length; col++) {
+                        if (map[row][col] === 1) {
+                            // Draw building
+                            ctx.fillStyle = '#94a3b8';
+                            ctx.fillRect(col * tileSize, row * tileSize, tileSize, tileSize);
+                            ctx.strokeStyle = '#64748b';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(col * tileSize, row * tileSize, tileSize, tileSize);
+                        }
+                    }
+                }
+            }
+
+            function drawCharacter() {
+                const charX = character.x * tileSize + tileSize / 2;
+                const charY = character.y * tileSize + tileSize / 2;
+
+                // Draw a circle for the character
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(charX, charY, character.size / 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw the direction indicator (a triangle)
+                ctx.fillStyle = '#f8fafc';
+                ctx.beginPath();
+                const arrowSize = 10;
+                switch (character.direction) {
+                    case 0: // Up
+                        ctx.moveTo(charX, charY - character.size / 2 + arrowSize);
+                        ctx.lineTo(charX - arrowSize / 2, charY - character.size / 2);
+                        ctx.lineTo(charX + arrowSize / 2, charY - character.size / 2);
+                        break;
+                    case 1: // Right
+                        ctx.moveTo(charX + character.size / 2 - arrowSize, charY);
+                        ctx.lineTo(charX + character.size / 2, charY - arrowSize / 2);
+                        ctx.lineTo(charX + character.size / 2, charY + arrowSize / 2);
+                        break;
+                    case 2: // Down
+                        ctx.moveTo(charX, charY + character.size / 2 - arrowSize);
+                        ctx.lineTo(charX - arrowSize / 2, charY + character.size / 2);
+                        ctx.lineTo(charX + arrowSize / 2, charY + character.size / 2);
+                        break;
+                    case 3: // Left
+                        ctx.moveTo(charX - character.size / 2 + arrowSize, charY);
+                        ctx.lineTo(charX - character.size / 2, charY - arrowSize / 2);
+                        ctx.lineTo(charX - character.size / 2, charY + arrowSize / 2);
+                        break;
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // --- Game Logic ---
+            function updateGame() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawMap();
+                drawCharacter();
+            }
+
+            // Function to check if a tile is a path and within bounds
+            function isPath(x, y) {
+                return x >= 0 && x < mapWidth && y >= 0 && y < mapHeight && map[y][x] === 0;
+            }
+
+            // Function to check if a tile is a turning point or a dead end
+            function isTurning(x, y) {
+                let pathCount = 0;
+                // Check neighbors
+                if (isPath(x, y - 1)) pathCount++; // Up
+                if (isPath(x, y + 1)) pathCount++; // Down
+                if (isPath(x - 1, y)) pathCount++; // Left
+                if (isPath(x + 1, y)) pathCount++; // Right
+                
+                // A straight path has exactly two walkable tiles.
+                // A turning or dead end has a pathCount that is not 2.
+                return pathCount !== 2;
+            }
+            
+            // --- Voice Recognition ---
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition;
+
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+
+                let isManuallyStopped = false;
+
+                recognition.onstart = function() {
+                    messageBox.textContent = 'Listening for commands...';
+                    voiceBtn.textContent = 'Stop Listening';
+                    voiceBtn.style.backgroundColor = '#ef4444'; // Red for stop
+                    voiceBtn.style.hoverBackgroundColor = '#dc2626';
+                    voiceBtn.style.activeBackgroundColor = '#b91c1c';
+                };
+
+                recognition.onresult = function(event) {
+                    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                    messageBox.textContent = `Command recognized: "${transcript}"`;
+                    processCommand(transcript);
+                };
+
+                recognition.onend = function() {
+                    if (isManuallyStopped) {
+                        messageBox.textContent = 'Voice command stopped.';
+                        isManuallyStopped = false;
+                    } else {
+                        messageBox.textContent = 'Voice command stopped automatically. Tap "Start Listening" to resume.';
+                    }
+                    voiceBtn.textContent = 'Start Listening';
+                    voiceBtn.style.backgroundColor = '#1d4ed8'; // Blue for start
+                    voiceBtn.style.hoverBackgroundColor = '#1e40af';
+                    voiceBtn.style.activeBackgroundColor = '#1e3a8a';
+                };
+
+                recognition.onerror = function(event) {
+                    let errorMessage = 'An error occurred. ';
+                    if (event.error === 'not-allowed') {
+                        errorMessage += 'Please allow microphone access in your browser settings.';
+                    } else if (event.error === 'network') {
+                        errorMessage += 'Check your internet connection.';
+                    } else if (event.error === 'audio-capture') {
+                        errorMessage += 'No microphone was found. Make sure one is connected.';
+                    } else {
+                        errorMessage += `Error: ${event.error}`;
+                    }
+                    messageBox.textContent = errorMessage;
+                    console.error('Speech recognition error:', event.error);
+                    isManuallyStopped = false;
+                    recognition.stop(); // Ensure it's stopped on error
+                };
+                
+                voiceBtn.onclick = function() {
+                    if (voiceBtn.textContent === 'Start Listening') {
+                        // Request permission directly on the user's tap
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            messageBox.textContent = 'Speech recognition is already running or a system error occurred. Please refresh the page if this persists.';
+                            console.error('Error starting recognition:', e);
+                        }
+                    } else {
+                        isManuallyStopped = true;
+                        recognition.stop();
+                    }
+                };
+            } else {
+                messageBox.textContent = 'Sorry, your browser does not support the Web Speech API.';
+                voiceBtn.disabled = true;
+            }
+
+            function processCommand(command) {
+                let newX = character.x;
+                let newY = character.y;
+                let newDirection = character.direction;
+
+                if (command.includes('turn around')) {
+                    newDirection = (character.direction + 2) % 4;
+                    character.direction = newDirection;
+                } else if (command.includes('turn left') || command.includes('turn light')) {
+                    newDirection = (character.direction - 1 + 4) % 4;
+                    character.direction = newDirection;
+                } else if (command.includes('turn right') || command.includes('turn wight') || command.includes('turn lite')) {
+                    newDirection = (character.direction + 1) % 4;
+                    character.direction = newDirection;
+                } else if (command.includes('go forward') || command.includes('forward') || command.includes('go straight')) {
+                    if (character.direction === 0) newY--;
+                    if (character.direction === 1) newX++;
+                    if (character.direction === 2) newY++;
+                    if (character.direction === 3) newX--;
+
+                    if (isPath(newX, newY)) {
+                        character.x = newX;
+                        character.y = newY;
+                    } else {
+                        messageBox.textContent += " (Can't move there!)";
+                    }
+                } else if (command.includes('go along')) {
+                    let moved = false;
+                    while (true) {
+                        let nextX = character.x;
+                        let nextY = character.y;
+
+                        if (character.direction === 0) nextY--;
+                        if (character.direction === 1) nextX++;
+                        if (character.direction === 2) nextY++;
+                        if (character.direction === 3) nextX--;
+
+                        if (isPath(nextX, nextY)) {
+                            character.x = nextX;
+                            character.y = nextY;
+                            moved = true;
+
+                            if (isTurning(character.x, character.y)) {
+                                break;
+                            }
+                        } else {
+                            if (moved) {
+                                messageBox.textContent += " (Reached the end of the path!)";
+                            } else {
+                                messageBox.textContent += " (Can't move there!)";
+                            }
+                            break;
+                        }
+                    }
+                } else {
+                    messageBox.textContent = `Command not recognized: "${command}"`;
+                }
+                
+                updateGame();
+            }
+
+            updateGame();
+        };
+    </script>
+</body>
+</html>
